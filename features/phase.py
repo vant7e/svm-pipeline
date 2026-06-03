@@ -37,26 +37,31 @@ def parse_freqs(freq_string):
     return np.array([float(f) for f in freq_string.split(",")])
 
 
-def crop_epochs_if_needed(epochs, time_range=None):
+def crop_feature_time(feature, times, time_range=None):
     """
-    Crop epochs before time-frequency decomposition.
+    Crop feature after TFR computation.
 
-    Parameters
-    ----------
-    epochs : mne.Epochs
-    time_range : tuple or None
-        Example: (0.0, 0.6)
-
-    Returns
-    -------
-    epochs : mne.Epochs
+    Input feature shape:
+        (freq, time, trial, channel)
     """
 
     if time_range is None:
-        return epochs
+        return feature, times
 
     tmin, tmax = time_range
-    return epochs.copy().crop(tmin=tmin, tmax=tmax)
+
+    tidx = np.where((times >= tmin) & (times <= tmax))[0]
+
+    if len(tidx) == 0:
+        raise ValueError(
+            f"No TFR time points found between {tmin} and {tmax}. "
+            f"Available range: {times[0]} to {times[-1]}"
+        )
+
+    feature = feature[:, tidx, :, :]
+    times = times[tidx]
+
+    return feature, times
 
 
 def compute_phase_feature(
@@ -69,6 +74,11 @@ def compute_phase_feature(
 ):
     """
     Compute phase feature from MNE Epochs.
+
+    Important:
+        Do NOT crop epochs before Morlet TFR.
+        Low-frequency wavelets may be longer than a short cropped signal.
+        Crop time AFTER TFR computation.
 
     Standard output shape:
         (freq, time, trial, channel)
@@ -86,21 +96,11 @@ def compute_phase_feature(
         Output shape:
             (2 * freq, time, trial, channel)
 
-        Frequency metadata is duplicated:
-            [f1_sin, f2_sin, ..., fN_sin, f1_cos, ..., fN_cos]
-
     complex_unit:
         Complex unit representation exp(1j * phase).
         Output dtype is complex64.
         Output shape:
             (freq, time, trial, channel)
-
-    Notes
-    -----
-    This file only computes pure phase representations.
-    Circular summaries such as resultant length, circular variance,
-    mean absolute wrapped distance, or cosine phase distance should be
-    computed later in a geometry/RDM layer, not here.
     """
 
     if representation not in VALID_PHASE_REPRESENTATIONS:
@@ -109,12 +109,11 @@ def compute_phase_feature(
             f"Options: {sorted(VALID_PHASE_REPRESENTATIONS)}"
         )
 
-    epochs = crop_epochs_if_needed(epochs, time_range=time_range)
-
     freqs = parse_freqs(freq_str)
     n_cycles = freqs / 2.0
 
     phase_chunks = []
+    times = None
 
     for i in range(0, len(freqs), chunk_size):
         f_chunk = freqs[i:i + chunk_size]
@@ -135,8 +134,10 @@ def compute_phase_feature(
         # MNE output:
         # (trial, channel, freq_chunk, time)
         phase_chunk = np.angle(tfr.data)
-
         phase_chunks.append(phase_chunk)
+
+        if times is None:
+            times = tfr.times
 
     phase = np.concatenate(phase_chunks, axis=2)
 
@@ -145,8 +146,6 @@ def compute_phase_feature(
     # -> standard:
     # (freq, time, trial, channel)
     phase = np.transpose(phase, (2, 3, 0, 1))
-
-    times = tfr.times
 
     if representation == "angle":
         feature = phase.astype(np.float32)
@@ -157,8 +156,8 @@ def compute_phase_feature(
         phase_sin = np.sin(phase)
         phase_cos = np.cos(phase)
 
-        # Concatenate along fake/expanded frequency axis:
-        # (2 * freq, time, trial, channel)
+        # Concatenate along frequency axis:
+        # first half = sin(phase), second half = cos(phase)
         feature = np.concatenate([phase_sin, phase_cos], axis=0).astype(np.float32)
 
         out_freqs = np.concatenate([freqs, freqs]).astype(float)
@@ -175,6 +174,13 @@ def compute_phase_feature(
 
     else:
         raise RuntimeError(f"Unhandled representation: {representation}")
+
+    # Crop AFTER TFR / phase representation
+    feature, times = crop_feature_time(
+        feature=feature,
+        times=times,
+        time_range=time_range,
+    )
 
     return feature, out_freqs, times, representation_note
 
@@ -252,6 +258,7 @@ def compute_and_save_phase_feature(
     notes = (
         f"{representation_note} "
         f"Computed using Morlet wavelets with n_cycles=freq/2. "
+        f"TFR was computed before time cropping to avoid short-signal wavelet errors. "
         f"Pure phase feature only; circular geometry should be handled downstream."
     )
 
@@ -274,6 +281,7 @@ def compute_and_save_phase_feature(
     meta["n_jobs"] = n_jobs
     meta["chunk_size"] = chunk_size
     meta["time_range"] = list(time_range) if time_range is not None else None
+    meta["tfr_crop_strategy"] = "compute_tfr_first_then_crop_feature_time"
 
     if representation == "sin_cos":
         n_base_freq = len(parse_freqs(freq_str))
