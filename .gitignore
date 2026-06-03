@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+outputs/
+results/
+logs/
+tmp/
+
+*.fif
+*.npy
+*.npz
+*.pkl_
