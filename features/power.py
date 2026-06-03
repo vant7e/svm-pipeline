@@ -36,22 +36,6 @@ def parse_freqs(freq_string):
 
     return np.array([float(f) for f in freq_string.split(",")])
 
-
-def crop_epochs_if_needed(epochs, time_range=None):
-    """
-    Crop epochs before time-frequency decomposition.
-
-    time_range example:
-        (0.0, 0.6)
-    """
-
-    if time_range is None:
-        return epochs
-
-    tmin, tmax = time_range
-    return epochs.copy().crop(tmin=tmin, tmax=tmax)
-
-
 def compute_power_feature(
     epochs,
     freq_str="2:30:1",
@@ -63,25 +47,12 @@ def compute_power_feature(
     """
     Compute power feature from MNE Epochs.
 
+    Important:
+        Do NOT crop epochs before Morlet TFR.
+        Low-frequency wavelets may be longer than a short cropped signal.
+
     Standard output shape:
         (freq, time, trial, channel)
-
-    Representations
-    ---------------
-    magnitude:
-        abs(complex TFR)
-
-    magnitude_squared:
-        abs(complex TFR) ** 2
-
-    log_power:
-        log1p(abs(complex TFR) ** 2)
-
-    Notes
-    -----
-    This file only computes pure power/magnitude representations.
-    Any later frequency-band averaging, time-window averaging, RSA distance,
-    or classifier projection should happen downstream.
     """
 
     if representation not in VALID_POWER_REPRESENTATIONS:
@@ -90,15 +61,11 @@ def compute_power_feature(
             f"Options: {sorted(VALID_POWER_REPRESENTATIONS)}"
         )
 
-    epochs = crop_epochs_if_needed(
-        epochs,
-        time_range=time_range,
-    )
-
     freqs = parse_freqs(freq_str)
     n_cycles = freqs / 2.0
 
     power_chunks = []
+    times = None
 
     for i in range(0, len(freqs), chunk_size):
         f_chunk = freqs[i:i + chunk_size]
@@ -116,33 +83,42 @@ def compute_power_feature(
             verbose=False,
         )
 
-        # MNE output:
-        # (trial, channel, freq_chunk, time)
+        # MNE output: (trial, channel, freq_chunk, time)
         magnitude = np.abs(tfr.data)
 
         if representation == "magnitude":
             power_chunk = magnitude
-
         elif representation == "magnitude_squared":
             power_chunk = magnitude ** 2
-
         elif representation == "log_power":
             power_chunk = np.log1p(magnitude ** 2)
-
         else:
             raise RuntimeError(f"Unhandled representation: {representation}")
 
         power_chunks.append(power_chunk)
 
+        if times is None:
+            times = tfr.times
+
     power = np.concatenate(power_chunks, axis=2)
 
-    # power:
     # (trial, channel, freq, time)
-    # -> standard:
-    # (freq, time, trial, channel)
+    # -> (freq, time, trial, channel)
     feature = np.transpose(power, (2, 3, 0, 1)).astype(np.float32)
 
-    times = tfr.times
+    # Crop AFTER TFR
+    if time_range is not None:
+        tmin, tmax = time_range
+        tidx = np.where((times >= tmin) & (times <= tmax))[0]
+
+        if len(tidx) == 0:
+            raise ValueError(
+                f"No TFR time points found between {tmin} and {tmax}. "
+                f"Available range: {times[0]} to {times[-1]}"
+            )
+
+        feature = feature[:, tidx, :, :]
+        times = times[tidx]
 
     return feature, freqs.astype(float), times
 
