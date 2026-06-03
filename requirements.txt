@@ -1,0 +1,36 @@
+numpy>=1.26
+scipy>=1.13
+pandas>=2.2
+
+matplotlib>=3.10
+seaborn>=0.13
+
+mne>=1.10
+mne-icalabel>=0.8
+autoreject>=0.4
+
+scikit-learn>=1.5
+joblib>=1.5
+
+torch>=2.6
+torchvision>=0.21
+transformers
+timm
+open_clip_torch
+clip @ git+https://github.com/openai/CLIP.git
+CORnet @ git+https://github.com/dicarlolab/CORnet
+thingsvision @ git+https://github.com/ViCCo-Group/thingsvision.git
+
+gensim
+nltk
+panphon
+editdistance
+
+scikit-image
+ImageIO
+h5py
+pymatreader
+
+tqdm
+PyYAML
+rich
