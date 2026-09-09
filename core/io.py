@@ -9,10 +9,6 @@ from .schema import (
     validate_feature_meta,
 )
 
-
-# =================================================
-# Save feature array
-# =================================================
 def save_feature_array(path, feature):
     """
     Save feature array (.npy)
@@ -32,9 +28,6 @@ def save_feature_array(path, feature):
         np.save(path, feature.astype(np.float32))
 
 
-# =================================================
-# Load feature array
-# =================================================
 def load_feature_array(path, mmap=True):
 
     path = Path(path)
@@ -52,9 +45,6 @@ def load_feature_array(path, mmap=True):
     return feature
 
 
-# =================================================
-# Save metadata
-# =================================================
 def save_feature_meta(path, meta):
     """
     Save metadata as JSON
@@ -73,9 +63,6 @@ def save_feature_meta(path, meta):
         json.dump(meta, f, indent=2)
 
 
-# =================================================
-# Load metadata
-# =================================================
 def load_feature_meta(path):
 
     path = Path(path)
@@ -91,9 +78,6 @@ def load_feature_meta(path):
     return meta
 
 
-# =================================================
-# Save feature package
-# =================================================
 def save_feature_package(
     feature_path,
     meta_path,
@@ -113,9 +97,6 @@ def save_feature_package(
     save_feature_meta(meta_path, meta)
 
 
-# =================================================
-# Load feature package
-# =================================================
 def load_feature_package(
     feature_path,
     meta_path,
@@ -135,9 +116,6 @@ def load_feature_package(
     return feature, meta
 
 
-# =================================================
-# Check whether recomputation needed
-# =================================================
 def should_compute(path, overwrite=False):
 
     path = Path(path)
@@ -148,9 +126,6 @@ def should_compute(path, overwrite=False):
     return not path.exists()
 
 
-# =================================================
-# Standardized feature naming
-# =================================================
 def build_feature_filename(
     subject,
     task,
@@ -180,9 +155,6 @@ def build_feature_filename(
     return name
 
 
-# =================================================
-# Build feature paths
-# =================================================
 def build_feature_paths(
     out_dir,
     subject,
@@ -207,10 +179,6 @@ def build_feature_paths(
 
     return feature_path, meta_path
 
-
-# =================================================
-# Human-readable summary
-# =================================================
 def print_feature_summary(meta):
 
     shape = meta["shape"]
