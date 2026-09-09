@@ -14,11 +14,24 @@ VALID_FEATURE_SPACES = {
 }
 
 VALID_REPRESENTATIONS = {
-    "raw": {"amplitude"},
-    "power": {"magnitude", "magnitude_squared", "log_power"},
-    "phase": {"angle", "sin_cos", "complex_unit"},
-}
+    "raw": {
+        "amplitude",
+    },
 
+    "power": {
+        "magnitude",
+        "magnitude_squared",
+        "log_power",
+    },
+
+    "phase": {
+        "angle",
+        "sin_cos",
+        "unit_sin_cos",
+        "complex_unit",
+        "resultant",
+    },
+}
 
 @dataclass
 class FeatureMeta:
